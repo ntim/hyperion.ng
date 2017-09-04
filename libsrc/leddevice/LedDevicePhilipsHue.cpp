@@ -5,6 +5,7 @@
 #include <QtCore/qmath.h>
 #include <QEventLoop>
 #include <QNetworkReply>
+#include <QThread>
 
 const CiColor CiColor::BLACK =
 { 0, 0, 0 };
@@ -129,7 +130,7 @@ float CiColor::getDistanceBetweenTwoPoints(CiColor p1, CiColor p2)
 QByteArray PhilipsHueBridge::get(QString route)
 {
 	QString url = QString("http://%1/api/%2/%3").arg(host).arg(username).arg(route);
-	Debug(log, "Get %s", url.toStdString().c_str());
+	// Debug(log, "Get %s", url.toStdString().c_str());
 	// Perfrom request
 	QNetworkRequest request(url);
 	QNetworkReply* reply = manager->get(request);
@@ -149,7 +150,7 @@ QByteArray PhilipsHueBridge::get(QString route)
 void PhilipsHueBridge::post(QString route, QString content)
 {
 	QString url = QString("http://%1/api/%2/%3").arg(host).arg(username).arg(route);
-	Debug(log, "Post %s: %s", url.toStdString().c_str(), content.toStdString().c_str());
+	// Debug(log, "Post %s: %s", url.toStdString().c_str(), content.toStdString().c_str());
 	// Perfrom request
 	QNetworkRequest request(url);
 	QNetworkReply* reply = manager->put(request, content.toLatin1());
@@ -269,29 +270,29 @@ void PhilipsHueLight::setOn(bool on)
 {
 	if (this->on != on)
 	{
+		this->on = on;
 		QString arg = on ? "true" : "false";
 		set(QString("{ \"on\": %1 }").arg(arg));
 	}
-	this->on = on;
 }
 
 void PhilipsHueLight::setTransitionTime(unsigned int transitionTime)
 {
 	if (this->transitionTime != transitionTime)
 	{
+		this->transitionTime = transitionTime;
 		set(QString("{ \"transitiontime\": %1 }").arg(transitionTime));
 	}
-	this->transitionTime = transitionTime;
 }
 
 void PhilipsHueLight::setColor(CiColor color, float brightnessFactor)
 {
 	if (this->color != color)
 	{
+		this->color = color;
 		const int bri = qRound(qMin(254.0f, brightnessFactor * qMax(1.0f, color.bri * 254.0f)));
 		set(QString("{ \"xy\": [%1, %2], \"bri\": %3 }").arg(color.x, 0, 'f', 4).arg(color.y, 0, 'f', 4).arg(bri));
 	}
-	this->color = color;
 }
 
 CiColor PhilipsHueLight::getColor() const
@@ -337,6 +338,9 @@ bool LedDevicePhilipsHue::init(const QJsonObject &deviceConfig)
 		lightIds.push_back(lArray[i].toInt());
 	}
 
+	// Save the states of the configured lights.
+	saveStates(getLedCount());
+
 	return true;
 }
 
@@ -350,13 +354,14 @@ int LedDevicePhilipsHue::write(const std::vector<ColorRgb> & ledValues)
 	// Save light states if not done before.
 	if (!areStatesSaved())
 	{
-		saveStates((unsigned int) ledValues.size());
+		Error(_log, "no states saved");
+		return -1;
 	}
 	// If there are less states saved than colors given, then maybe something went wrong before.
 	if (lights.size() != ledValues.size())
 	{
-		restoreStates();
-		return 0;
+		Error(_log, "Number of lights %d mismatches number of color values %d", lights.size(), ledValues.size());
+		return -1;
 	}
 	// Iterate through colors and set light states.
 	unsigned int idx = 0;
@@ -392,6 +397,7 @@ int LedDevicePhilipsHue::write(const std::vector<ColorRgb> & ledValues)
 
 int LedDevicePhilipsHue::switchOff()
 {
+	Debug(_log, "Switching off");
 	timer.stop();
 	// If light states have been saved before, ...
 	if (areStatesSaved())
@@ -405,6 +411,7 @@ int LedDevicePhilipsHue::switchOff()
 void LedDevicePhilipsHue::saveStates(unsigned int nLights)
 {
 
+	Debug(_log, "Saving states of %d lights", nLights);
 	// Clear saved lamps.
 	lights.clear();
 	//
@@ -443,11 +450,11 @@ void LedDevicePhilipsHue::saveStates(unsigned int nLights)
 	{
 		lights.push_back(PhilipsHueLight(_log, bridge, lightIds.at(i)));
 	}
-
 }
 
 void LedDevicePhilipsHue::restoreStates()
 {
+	Debug(_log, "Restoring states");
 	lights.clear();
 }
 
