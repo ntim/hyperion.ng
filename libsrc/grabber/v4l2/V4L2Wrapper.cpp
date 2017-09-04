@@ -8,16 +8,16 @@ V4L2Wrapper::V4L2Wrapper(const QString &device,
 		int input,
 		VideoStandard videoStandard,
 		PixelFormat pixelFormat,
-		int width,
-		int height,
+		unsigned width,
+		unsigned height,
 		int frameDecimation,
 		int pixelDecimation,
 		double redSignalThreshold,
 		double greenSignalThreshold,
 		double blueSignalThreshold,
-		const int priority)
-	: GrabberWrapper("V4L2:"+device, priority, hyperion::COMP_V4L)
-	, _timeout_ms(1000)
+		const int priority,
+		bool useGrabbingMode)
+	: GrabberWrapper("V4L2:"+device, &_grabber, width, height, 8, priority, hyperion::COMP_V4L)
 	, _grabber(device,
 			input,
 			videoStandard,
@@ -27,10 +27,10 @@ V4L2Wrapper::V4L2Wrapper(const QString &device,
 			frameDecimation,
 			pixelDecimation,
 			pixelDecimation)
-	, _ledColors(Hyperion::getInstance()->getLedCount(), ColorRgb{0,0,0})
 {
 	// set the signal detection threshold of the grabber
 	_grabber.setSignalThreshold( redSignalThreshold, greenSignalThreshold, blueSignalThreshold, 50);
+	_ggrabber = &_grabber;
 
 	// register the image type
 	qRegisterMetaType<Image<ColorRgb>>("Image<ColorRgb>");
@@ -39,23 +39,13 @@ V4L2Wrapper::V4L2Wrapper(const QString &device,
 
 	// Handle the image in the captured thread using a direct connection
 	QObject::connect(&_grabber, SIGNAL(newFrame(Image<ColorRgb>)), this, SLOT(newFrame(Image<ColorRgb>)), Qt::DirectConnection);
-
 	QObject::connect(&_grabber, SIGNAL(readError(const char*)), this, SLOT(readError(const char*)), Qt::DirectConnection);
 
-	// send color data to Hyperion using a queued connection to handle the data over to the main event loop
-// 	QObject::connect(
-// 				this, SIGNAL(emitColors(int,std::vector<ColorRgb>,int)),
-// 				_hyperion, SLOT(setColors(int,std::vector<ColorRgb>,int)),
-// 				Qt::QueuedConnection);
-
-	
-	// setup the higher prio source checker
-	// this will disable the v4l2 grabber when a source with higher priority is active
+	if (!useGrabbingMode)
+	{
+			disconnect(_hyperion, SIGNAL(grabbingMode(GrabbingMode)), this, 0);
+	}
 	_timer.setInterval(500);
-}
-
-V4L2Wrapper::~V4L2Wrapper()
-{
 }
 
 bool V4L2Wrapper::start()
@@ -79,12 +69,6 @@ void V4L2Wrapper::setSignalDetectionOffset(double verticalMin, double horizontal
 	_grabber.setSignalDetectionOffset(verticalMin, horizontalMin, verticalMax, horizontalMax);
 }
 
-
-void V4L2Wrapper::set3D(VideoMode mode)
-{
-	_grabber.set3D(mode);
-}
-
 void V4L2Wrapper::newFrame(const Image<ColorRgb> &image)
 {
 	emit emitImage(_priority, image, _timeout_ms);
@@ -102,20 +86,14 @@ void V4L2Wrapper::readError(const char* err)
 	
 void V4L2Wrapper::checkSources()
 {
-	QList<int> activePriorities = _hyperion->getActivePriorities();
-
-	for (int x : activePriorities)
+	if ( _hyperion->isCurrentPriority(_priority))
 	{
-		if (x < _priority)
-		{
-			// found a higher priority source: grabber should be disabled
-			_grabber.stop();
-			return;
-		}
+		_grabber.start();
 	}
-
-	// no higher priority source was found: grabber should be enabled
-	_grabber.start();
+	else
+	{
+		_grabber.stop();
+	}
 }
 
 void V4L2Wrapper::action()

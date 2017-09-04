@@ -4,34 +4,10 @@ INCLUDE (CheckIncludeFiles)
 SET(CURRENT_HEADER_DIR ${CMAKE_SOURCE_DIR}/include/grabber)
 SET(CURRENT_SOURCE_DIR ${CMAKE_SOURCE_DIR}/libsrc/grabber/amlogic)
 
-# Group the headers that go through the MOC compiler
-SET(AmlogicQT_HEADERS ${CURRENT_HEADER_DIR}/AmlogicWrapper.h)
+FILE ( GLOB AmlogicSOURCES "${CURRENT_HEADER_DIR}/Amlogic*.h"  "${CURRENT_SOURCE_DIR}/*.h"  "${CURRENT_SOURCE_DIR}/*.cpp" )
 
-SET(AmlogicHEADERS
-	${CURRENT_HEADER_DIR}/AmlogicGrabber.h
-)
-
-SET(AmlogicSOURCES
-	${CURRENT_SOURCE_DIR}/AmlogicWrapper.cpp
-	${CURRENT_SOURCE_DIR}/AmlogicGrabber.cpp
-)
-
-QT5_WRAP_CPP(AmlogicHEADERS_MOC ${AmlogicQT_HEADERS})
-
-CHECK_INCLUDE_FILES ("amcodec/amports/amstream.h" HAVE_AML_HEADER)
-IF (${HAVE_AML_HEADER})
-	ADD_DEFINITIONS( -DHAVE_AML_HEADER )
-ENDIF()
-
-
-add_library(amlogic-grabber
-	${AmlogicHEADERS}
-	${AmlogicQT_HEADERS}
-	${AmlogicHEADERS_MOC}
-	${AmlogicSOURCES}
-)
+add_library(amlogic-grabber ${AmlogicSOURCES} )
 
 target_link_libraries(amlogic-grabber
 	hyperion
 	${QT_LIBRARIES})
-	

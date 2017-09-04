@@ -5,35 +5,14 @@ SET(CURRENT_SOURCE_DIR ${CMAKE_SOURCE_DIR}/libsrc/grabber/x11)
 # Find X11
 find_package(X11 REQUIRED)
 
-include_directories(
-	${QT_INCLUDES}
-	${X11_INCLUDES}
-)
-SET(X11_QT_HEADERS
-	${CURRENT_HEADER_DIR}/X11Wrapper.h
-)
+include_directories( ${X11_INCLUDES} )
 
-SET(X11_HEADERS
-	${CURRENT_HEADER_DIR}/X11Grabber.h
-)
+FILE ( GLOB X11_SOURCES "${CURRENT_HEADER_DIR}/X11*.h"  "${CURRENT_SOURCE_DIR}/*.h"  "${CURRENT_SOURCE_DIR}/*.cpp" )
 
-SET(X11_SOURCES
-	${CURRENT_SOURCE_DIR}/X11Grabber.cpp
-	${CURRENT_SOURCE_DIR}/X11Wrapper.cpp
-)
-
-QT5_WRAP_CPP(X11_HEADERS_MOC ${X11_QT_HEADERS})
-
-add_library(x11-grabber
-	${X11_HEADERS}
-	${X11_SOURCES}
-	${X11_QT_HEADERS}
-	${X11_HEADERS_MOC}
-)
+add_library(x11-grabber ${X11_SOURCES} )
 
 target_link_libraries(x11-grabber
 	hyperion
-		${X11_LIBRARIES}
-		${X11_Xrender_LIB}
-		${QT_LIBRARIES}
+	${X11_LIBRARIES}
+	${X11_Xrender_LIB}
 )

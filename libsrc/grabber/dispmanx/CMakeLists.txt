@@ -1,34 +1,19 @@
-
 # Find the BCM-package (VC control)
-find_package(BCM REQUIRED)
-include_directories(${BCM_INCLUDE_DIRS})
+IF ( "${PLATFORM}" MATCHES rpi)
+	find_package(BCM REQUIRED)
+	include_directories(${BCM_INCLUDE_DIRS})
+ELSE()
+	SET(BCM_INCLUDE_DIRS "")
+	SET(BCM_LIBRARIES "")
+ENDIF()
 
 # Define the current source locations
 SET(CURRENT_HEADER_DIR ${CMAKE_SOURCE_DIR}/include/grabber)
 SET(CURRENT_SOURCE_DIR ${CMAKE_SOURCE_DIR}/libsrc/grabber/dispmanx)
 
-# Group the headers that go through the MOC compiler
-SET(DispmanxGrabberQT_HEADERS
-	${CURRENT_HEADER_DIR}/DispmanxWrapper.h
-)
+FILE ( GLOB DispmanxGrabberSOURCES "${CURRENT_HEADER_DIR}/Dispmanx*.h"  "${CURRENT_SOURCE_DIR}/*.h"  "${CURRENT_SOURCE_DIR}/*.cpp" )
 
-SET(DispmanxGrabberHEADERS
-	${CURRENT_HEADER_DIR}/DispmanxFrameGrabber.h
-)
-
-SET(DispmanxGrabberSOURCES
-	${CURRENT_SOURCE_DIR}/DispmanxWrapper.cpp
-	${CURRENT_SOURCE_DIR}/DispmanxFrameGrabber.cpp
-)
-
-QT5_WRAP_CPP(DispmanxGrabberHEADERS_MOC ${DispmanxGrabberQT_HEADERS})
-
-add_library(dispmanx-grabber
-	${DispmanxGrabberHEADERS}
-	${DispmanxGrabberQT_HEADERS}
-	${DispmanxGrabberHEADERS_MOC}
-	${DispmanxGrabberSOURCES}
-)
+add_library(dispmanx-grabber ${DispmanxGrabberSOURCES} )
 
 target_link_libraries(dispmanx-grabber
 	hyperion

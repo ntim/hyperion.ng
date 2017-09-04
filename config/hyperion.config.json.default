@@ -16,7 +16,8 @@
 		"output"     : "/dev/null",
 		"rate"       : 1000000,
 		"colorOrder" : "rgb",
-		"rewriteTime": 5000
+		"rewriteTime": 5000,
+		"latchTime" : 10
 	},
 
 	"color" :
@@ -63,8 +64,8 @@
 			"device"   : "auto",
 			"input"    : 0,
 			"standard" : "PAL",
-			"width"    : -1,
-			"height"   : -1,
+			"width"    : 0,
+			"height"   : 0,
 			"frameDecimation" : 2,
 			"sizeDecimation"  : 8,
 			"priority"    : 240,
@@ -74,14 +75,14 @@
 			"cropRight"   : 0,
 			"cropTop"     : 0,
 			"cropBottom"  : 0,
-			"redSignalThreshold"   : 0.0,
-			"greenSignalThreshold" : 0.0,
-			"blueSignalThreshold"  : 0.0,
-			"signalDetection"      : true,
-			"signalDetectionVerticalOffsetMin"   : 0.25,
-			"signalDetectionHorizontalOffsetMin" : 0.25,
-			"signalDetectionVerticalOffsetMax"   : 0.75,
-			"signalDetectionHorizontalOffsetMax" : 0.75
+			"redSignalThreshold"   : 5,
+			"greenSignalThreshold" : 5,
+			"blueSignalThreshold"  : 5,
+			"signalDetection"      : false,
+			"sDVOffsetMin"   : 0.25,
+			"sDHOffsetMin" : 0.25,
+			"sDVOffsetMax"   : 0.75,
+			"sDHOffsetMax" : 0.75
 		}
 	],
 

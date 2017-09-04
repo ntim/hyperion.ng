@@ -1,11 +1,6 @@
 #pragma once
 
-// Hyperion includes
-#include <hyperion/Hyperion.h>
-#include <hyperion/ImageProcessor.h>
 #include <hyperion/GrabberWrapper.h>
-
-// Grabber includes
 #include <grabber/V4L2Grabber.h>
 
 class V4L2Wrapper : public GrabberWrapper
@@ -17,15 +12,16 @@ public:
 			int input,
 			VideoStandard videoStandard,
 			PixelFormat pixelFormat,
-			int width,
-			int height,
+			unsigned width,
+			unsigned height,
 			int frameDecimation,
 			int pixelDecimation,
 			double redSignalThreshold,
 			double greenSignalThreshold,
 			double blueSignalThreshold,
-			const int priority);
-	virtual ~V4L2Wrapper();
+			const int priority,
+			bool useGrabbingMode);
+	virtual ~V4L2Wrapper() {};
 
 	bool getSignalDetectionEnable();
 
@@ -35,7 +31,6 @@ public slots:
 
 	void setCropping(int cropLeft, int cropRight, int cropTop, int cropBottom);
 	void setSignalDetectionOffset(double verticalMin, double horizontalMin, double verticalMax, double horizontalMax);
-	void set3D(VideoMode mode);
 	void setSignalDetectionEnable(bool enable);
 
 // signals:
@@ -49,12 +44,6 @@ private slots:
 	void checkSources();
 
 private:
-	/// The timeout of the led colors [ms]
-	const int _timeout_ms;
-
 	/// The V4L2 grabber
 	V4L2Grabber _grabber;
-
-	/// The list with computed led colors
-	std::vector<ColorRgb> _ledColors;
 };

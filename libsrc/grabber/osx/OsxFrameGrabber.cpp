@@ -5,12 +5,9 @@
 // Local includes
 #include <grabber/OsxFrameGrabber.h>
 
-OsxFrameGrabber::OsxFrameGrabber(const unsigned display, const unsigned width, const unsigned height) :
-	_screenIndex(display),
-	_width(width),
-	_height(height),
-	_imgResampler(new ImageResampler()),
-	_log(Logger::getInstance("OSXGRABBER"))
+OsxFrameGrabber::OsxFrameGrabber(const unsigned display, const unsigned width, const unsigned height)
+	: Grabber("OSXGRABBER", width, height)
+	, _screenIndex(display)
 {
 	CGImageRef image;
 	CGDisplayCount displayCount;
@@ -22,7 +19,9 @@ OsxFrameGrabber::OsxFrameGrabber(const unsigned display, const unsigned width, c
 	{
 		Error(_log, "Display with index %d is not available. Using main display", _screenIndex);
 		_display = kCGDirectMainDisplay;
-	} else {
+	}
+	else
+	{
 		_display = displays[_screenIndex];
 	}
 		
@@ -36,16 +35,12 @@ OsxFrameGrabber::OsxFrameGrabber(const unsigned display, const unsigned width, c
 
 OsxFrameGrabber::~OsxFrameGrabber()
 {
-	delete _imgResampler;
 }
 
-void OsxFrameGrabber::setVideoMode(const VideoMode videoMode)
+int OsxFrameGrabber::grabFrame(Image<ColorRgb> & image)
 {
-	_imgResampler->set3D(videoMode);
-}
+	if (!_enabled) return 0;
 
-void OsxFrameGrabber::grabFrame(Image<ColorRgb> & image)
-{
 	CGImageRef dispImage;
 	CFDataRef imgData;
 	unsigned char * pImgData;	
@@ -53,7 +48,7 @@ void OsxFrameGrabber::grabFrame(Image<ColorRgb> & image)
 	
 	dispImage = CGDisplayCreateImage(_display);
 	
-	// dsiplay lost, use main
+	// display lost, use main
 	if (dispImage == NULL && _display)
 	{
 		dispImage = CGDisplayCreateImage(kCGDirectMainDisplay);
@@ -61,17 +56,17 @@ void OsxFrameGrabber::grabFrame(Image<ColorRgb> & image)
 		if (dispImage == NULL)
 		{
 			Error(_log, "No display connected...");
-			return;
+			return -1;
 		}
 	}
-	imgData = CGDataProviderCopyData(CGImageGetDataProvider(dispImage));
-	pImgData = (unsigned char*) CFDataGetBytePtr(imgData);
-	dspWidth = CGImageGetWidth(dispImage);
+	imgData   = CGDataProviderCopyData(CGImageGetDataProvider(dispImage));
+	pImgData  = (unsigned char*) CFDataGetBytePtr(imgData);
+	dspWidth  = CGImageGetWidth(dispImage);
 	dspHeight = CGImageGetHeight(dispImage);
 	
-	_imgResampler->setHorizontalPixelDecimation(dspWidth/_width);
-	_imgResampler->setVerticalPixelDecimation(dspHeight/_height);
-	_imgResampler->processImage( pImgData,
+	_imageResampler.setHorizontalPixelDecimation(dspWidth/_width);
+	_imageResampler.setVerticalPixelDecimation(dspHeight/_height);
+	_imageResampler.processImage( pImgData,
 								dspWidth,
 								dspHeight,
 								CGImageGetBytesPerRow(dispImage),
@@ -80,4 +75,6 @@ void OsxFrameGrabber::grabFrame(Image<ColorRgb> & image)
 	
 	CFRelease(imgData);
 	CGImageRelease(dispImage);
+
+	return 0;
 }

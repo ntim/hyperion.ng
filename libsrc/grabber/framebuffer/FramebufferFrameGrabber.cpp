@@ -12,14 +12,11 @@
 // Local includes
 #include <grabber/FramebufferFrameGrabber.h>
 
-FramebufferFrameGrabber::FramebufferFrameGrabber(const QString & device, const unsigned width, const unsigned height) :
-	_fbfd(0),
-	_fbp(0),
-	_fbDevice(device),
-	_width(width),
-	_height(height),
-	_imgResampler(new ImageResampler()),
-	_log(Logger::getInstance("FRAMEBUFFERGRABBER"))
+FramebufferFrameGrabber::FramebufferFrameGrabber(const QString & device, const unsigned width, const unsigned height)
+	: Grabber("FRAMEBUFFERGRABBER", width, height)
+	, _fbfd(0)
+	, _fbp(0)
+	, _fbDevice(device)
 {
 	int result;
 	struct fb_var_screeninfo vinfo;
@@ -40,7 +37,7 @@ FramebufferFrameGrabber::FramebufferFrameGrabber(const QString & device, const u
 		}
 		else
 		{
-			Error(_log, "Display opened with resolution: %dx%d@%dbit", vinfo.xres, vinfo.yres, vinfo.bits_per_pixel);			
+			Info(_log, "Display opened with resolution: %dx%d@%dbit", vinfo.xres, vinfo.yres, vinfo.bits_per_pixel);			
 		}
 		close(_fbfd);
 	}
@@ -48,16 +45,12 @@ FramebufferFrameGrabber::FramebufferFrameGrabber(const QString & device, const u
 
 FramebufferFrameGrabber::~FramebufferFrameGrabber()
 {
-	delete _imgResampler;
 }
 
-void FramebufferFrameGrabber::setVideoMode(const VideoMode videoMode)
+int FramebufferFrameGrabber::grabFrame(Image<ColorRgb> & image)
 {
-	_imgResampler->set3D(videoMode);
-}
+	if (!_enabled) return 0;
 
-void FramebufferFrameGrabber::grabFrame(Image<ColorRgb> & image)
-{
 	struct fb_var_screeninfo vinfo;
 	unsigned capSize, bytesPerPixel;
 	PixelFormat pixelFormat;
@@ -71,31 +64,23 @@ void FramebufferFrameGrabber::grabFrame(Image<ColorRgb> & image)
 	bytesPerPixel = vinfo.bits_per_pixel / 8;
 	capSize = vinfo.xres * vinfo.yres * bytesPerPixel;
 	
-	if (vinfo.bits_per_pixel == 16)
+	switch (vinfo.bits_per_pixel)
 	{
-		pixelFormat = PIXELFORMAT_BGR16;
+		case 16: pixelFormat = PIXELFORMAT_BGR16; break;
+		case 24: pixelFormat = PIXELFORMAT_BGR24; break;
+		case 32: pixelFormat = PIXELFORMAT_BGR32; break;
+		default:
+			Error(_log, "Unknown pixel format: %d bits per pixel", vinfo.bits_per_pixel);
+			close(_fbfd);
+			return -1;
 	}
-	else if (vinfo.bits_per_pixel == 24)
-	{
-		pixelFormat = PIXELFORMAT_BGR24;
-	}	
-	else if (vinfo.bits_per_pixel == 32)
-	{
-		pixelFormat = PIXELFORMAT_BGR32;
-	}
-	else
-	{
-		Error(_log, "Unknown pixel format: %d bits per pixel", vinfo.bits_per_pixel);
-		close(_fbfd);
-		return;
-	}
-			
+
 	/* map the device to memory */
 	_fbp = (unsigned char*)mmap(0, capSize, PROT_READ, MAP_PRIVATE | MAP_NORESERVE, _fbfd, 0);	
 
-	_imgResampler->setHorizontalPixelDecimation(vinfo.xres/_width);
-	_imgResampler->setVerticalPixelDecimation(vinfo.yres/_height);
-	_imgResampler->processImage(_fbp,
+	_imageResampler.setHorizontalPixelDecimation(vinfo.xres/_width);
+	_imageResampler.setVerticalPixelDecimation(vinfo.yres/_height);
+	_imageResampler.processImage(_fbp,
 								vinfo.xres,
 								vinfo.yres,
 								vinfo.xres * bytesPerPixel,
@@ -104,4 +89,6 @@ void FramebufferFrameGrabber::grabFrame(Image<ColorRgb> & image)
 	
 	munmap(_fbp, capSize);
 	close(_fbfd);
+
+	return 0;
 }

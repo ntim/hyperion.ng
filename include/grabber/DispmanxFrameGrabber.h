@@ -1,23 +1,23 @@
 #pragma once
 
 // BCM includes
-#pragma GCC system_header
-#include <bcm_host.h>
-
-// STL includes
-#include <cstdint>
+#ifdef PLATFORM_RPI
+	#pragma GCC system_header
+	#include <bcm_host.h>
+#else
+	#include <grabber/DispmanxFrameGrabberMock.h>
+#endif
 
 // Utils includes
 #include <utils/Image.h>
 #include <utils/ColorRgba.h>
-#include <utils/VideoMode.h>
-#include <utils/Logger.h>
+#include <hyperion/Grabber.h>
 
 ///
 /// The DispmanxFrameGrabber is used for creating snapshots of the display (screenshots) with a
 /// downsized and scaled resolution.
 ///
-class DispmanxFrameGrabber
+class DispmanxFrameGrabber : public Grabber
 {
 public:
 	///
@@ -29,21 +29,6 @@ public:
 	DispmanxFrameGrabber(const unsigned width, const unsigned height);
 	~DispmanxFrameGrabber();
 
-	///
-	/// Updates the frame-grab flags as used by the VC library for frame grabbing
-	///
-	/// @param vc_flags  The snapshot grabbing mask
-	///
-	void setFlags(const int vc_flags);
-
-	///
-	/// Set the video mode (2D/3D)
-	/// @param[in] mode The new video mode
-	///
-	void setVideoMode(const VideoMode videoMode);
-
-	void setCropping(const unsigned cropLeft, const unsigned cropRight,
-			 const unsigned cropTop, const unsigned cropBottom);
 
 	///
 	/// Captures a single snapshot of the display and writes the data to the given image. The
@@ -53,9 +38,16 @@ public:
 	/// @param[out] image  The snapped screenshot (should be initialized with correct width and
 	/// height)
 	///
-	void grabFrame(Image<ColorRgba> & image);
+	int grabFrame(Image<ColorRgb> & image);
 
 private:
+		///
+	/// Updates the frame-grab flags as used by the VC library for frame grabbing
+	///
+	/// @param vc_flags  The snapshot grabbing mask
+	///
+	void setFlags(const int vc_flags);
+	
 	/// Handle to the display that is being captured
 	DISPMANX_DISPLAY_HANDLE_T _vc_display;
 
@@ -68,23 +60,14 @@ private:
 	/// Flags (transforms) for creating snapshots
 	int _vc_flags;
 
-	/// With of the captured snapshot [pixels]
-	const unsigned _width;
-	/// Height of the captured snapshot [pixels]
-	const unsigned _height;
-
-	// the selected VideoMode
-	VideoMode _videoMode;
-
-	// number of pixels to crop after capturing
-	unsigned _cropLeft, _cropRight, _cropTop, _cropBottom;
-
 	// temp buffer when capturing with unsupported pitch size or
 	// when we need to crop the image
 	ColorRgba* _captureBuffer;
 
 	// size of the capture buffer in Pixels
 	unsigned _captureBufferSize;
-	
-	Logger * _log;
+
+	// rgba output buffer
+	Image<ColorRgba>  _image_rgba;
+
 };

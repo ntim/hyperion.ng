@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <cstring>
 #include <algorithm>
+#include <cassert>
 #include <utils/ColorRgb.h>
 
 
@@ -202,6 +203,14 @@ public:
 			const Pixel_T color = memptr()[idx];
 			image.memptr()[idx] = ColorRgb{color.red, color.green, color.blue};
 		}
+	}
+
+	///
+	/// get size of buffer
+	//
+	ssize_t size()
+	{
+		return  _width * _height * sizeof(Pixel_T);
 	}
 
 private:

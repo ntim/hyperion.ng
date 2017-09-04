@@ -13,12 +13,16 @@
 #include <QJsonObject>
 #include <QJsonValue>
 #include <QJsonArray>
+#include <QTimer>
+#include <QFileSystemWatcher>
 
 // hyperion-utils includes
 #include <utils/Image.h>
 #include <utils/ColorRgb.h>
 #include <utils/Logger.h>
 #include <utils/Components.h>
+#include <utils/VideoMode.h>
+#include <utils/GrabbingMode.h>
 
 // Hyperion includes
 #include <hyperion/LedString.h>
@@ -45,6 +49,7 @@ class EffectEngine;
 class RgbChannelAdjustment;
 class MultiColorAdjustment;
 class KODIVideoChecker;
+
 ///
 /// The main class of Hyperion. This gives other 'users' access to the attached LedDevice through
 /// the priority muxer.
@@ -91,7 +96,14 @@ public:
 	/// @return The current priority
 	///
 	int getCurrentPriority() const;
-	
+
+	///
+	/// Returns true if current priority is given priority
+	///
+	/// @return bool
+	///
+	bool isCurrentPriority(const int priority) const;
+
 	///
 	/// Returns a list of active priorities
 	///
@@ -116,15 +128,15 @@ public:
 	/// Get the list of available effects
 	/// @return The list of available effects
 	const std::list<EffectDefinition> &getEffects() const;
-	
+
 	/// Get the list of active effects
 	/// @return The list of active effects
 	const std::list<ActiveEffectDefinition> &getActiveEffects();
-	
+
 	/// Get the list of available effect schema files
 	/// @return The list of available effect schema files
 	const std::list<EffectSchema> &getEffectSchemas();
-	
+
 	/// gets the current json config object
 	/// @return json config
 	const QJsonObject& getQJsonConfig() { return _qjsonConfig; };
@@ -138,28 +150,28 @@ public:
 	/// @param origin External setter
 	/// @param priority priority channel
 	void registerPriority(const QString &name, const int priority);
-	
+
 	/// unregister a input source to a priority channel
 	/// @param name uniq name of input source
 	void unRegisterPriority(const QString &name);
-	
+
 	/// gets current priority register
 	/// @return the priority register
 	const PriorityRegister& getPriorityRegister() { return _priorityRegister; }
-	
+
 	/// enable/disable automatic/priorized source selection
 	/// @param enabled the state
 	void setSourceAutoSelectEnabled(bool enabled);
-	
+
 	/// set current input source to visible
 	/// @param priority the priority channel which should be vidible
 	/// @return true if success, false on error
 	bool setCurrentSourcePriority(int priority );
-	
+
 	/// gets current state of automatic/priorized source selection
 	/// @return the state
 	bool sourceAutoSelectEnabled() { return _sourceAutoSelectEnabled; };
-	
+
 	///
 	/// Enable/Disable components during runtime
 	///
@@ -170,14 +182,27 @@ public:
 
 	ComponentRegister& getComponentRegister() { return _componentRegister; };
 
-	bool configModified();
+	bool configModified() { return _configMod; };
 
-	bool configWriteable();
+	bool configWriteable() { return _configWrite; };
 
 	/// gets the methode how image is maped to leds
 	int getLedMappingType() { return _ledMAppingType; };
-	
+
 	int getConfigVersionId() { return _configVersionId; };
+
+	QJsonObject getConfig() { return _qjsonConfig; };
+
+	/// unique id per instance
+	QString id;
+
+	int getLatchTime() const;
+	
+	/// forward smoothing config
+	unsigned addSmoothingConfig(int settlingTime_ms, double ledUpdateFrequency_hz=25.0, unsigned updateDelay=0);
+
+	VideoMode getCurrentVideoMode() { return _videoMode; };
+	GrabbingMode getCurrentGrabbingMode() { return _grabbingMode; };
 
 public slots:
 	///
@@ -197,8 +222,9 @@ public slots:
 	/// @param[in] timeout_ms The time the leds are set to the given colors [ms]
 	/// @param[in] component The current component
 	/// @param[in] origin Who set it
+	/// @param[in] smoothCfg smoothing config id
 	///
-	void setColors(int priority, const std::vector<ColorRgb> &ledColors, const int timeout_ms, bool clearEffects = true, hyperion::Components component=hyperion::COMP_INVALID, const QString origin="System");
+	void setColors(int priority, const std::vector<ColorRgb> &ledColors, const int timeout_ms, bool clearEffects = true, hyperion::Components component=hyperion::COMP_INVALID, const QString origin="System", unsigned smoothCfg=SMOOTHING_MODE_DEFAULT);
 
 	///
 	/// Writes the given colors to all leds for the given time and priority
@@ -241,7 +267,7 @@ public slots:
 	///
 	/// Clears all priority channels. This will switch the leds off until a new priority is written.
 	///
-	void clearall();
+	void clearall(bool forceClearAll=false);
 
 	/// Run the specified effect on the given priority channel and optionally specify a timeout
 	/// @param effectName Name of the effec to run
@@ -262,6 +288,22 @@ public slots:
 
 	///
 	Hyperion::BonjourRegister getHyperionSessions();
+
+	/// Slot which is called, when state of hyperion has been changed
+	void hyperionStateChanged();
+
+	///
+	/// Set the video mode (2D/3D)
+	/// @param[in] mode The new video mode
+	///
+	void setVideoMode(VideoMode mode);
+	
+	///
+	/// Set the grabbing mode
+	/// @param[in] mode The new grabbing mode
+	///
+	void setGrabbingMode(const GrabbingMode mode);
+
 
 public:
 	static Hyperion *_hyperion;
@@ -301,6 +343,17 @@ signals:
 	void emitImage(int priority, const Image<ColorRgb> & image, const int timeout_ms);
 	void closing();
 
+	/// Signal which is emitted, when a new json message should be forwarded
+	void forwardJsonMessage(QJsonObject);
+
+	/// Signal which is emitted, after the hyperionStateChanged has been processed with a emit count blocker (250ms interval)
+	void sendServerInfo();
+
+	/// Signal emitted when a 3D movie is detected
+	void videoMode(VideoMode mode);
+
+	void grabbingMode(GrabbingMode mode);
+
 private slots:
 	///
 	/// Updates the priority muxer with the current time and (re)writes the led color with applied
@@ -309,11 +362,14 @@ private slots:
 	void update();
 
 	void currentBonjourRecordsChanged(const QList<BonjourRecord> &list);
-    void bonjourRecordResolved(const QHostInfo &hostInfo, int port);
+	void bonjourRecordResolved(const QHostInfo &hostInfo, int port);
 	void bonjourResolve();
 
+	/// check for configWriteable and modified changes, called by _fsWatcher or fallback _cTimer
+	void checkConfigState(QString cfile = NULL);
+
 private:
-	
+
 	///
 	/// Constructs the Hyperion instance based on the given Json configuration
 	///
@@ -328,12 +384,13 @@ private:
 	LedString _ledStringClone;
 
 	std::vector<ColorOrder> _ledStringColorOrder;
+
 	/// The priority muxer
 	PriorityMuxer _muxer;
 
 	/// The adjustment from raw colors to led colors
 	MultiColorAdjustment * _raw2ledAdjustment;
-	
+
 	/// The actual LedDevice
 	LedDevice * _device;
 
@@ -342,14 +399,14 @@ private:
 
 	/// Effect engine
 	EffectEngine * _effectEngine;
-	
+
 	// proto and json Message forwarder
 	MessageForwarder * _messageForwarder;
 
 	// json configuration
 	const QJsonObject& _qjsonConfig;
 
-	// the name of config file
+	/// the name of config file
 	QString _configFile;
 
 	/// The timer for handling priority channel timeouts
@@ -366,27 +423,46 @@ private:
 	unsigned _hwLedCount;
 
 	ComponentRegister _componentRegister;
-	
+
 	/// register of input sources and it's prio channel
 	PriorityRegister _priorityRegister;
 
 	/// flag indicates state for autoselection of input source
 	bool _sourceAutoSelectEnabled;
-	
+
 	/// holds the current priority channel that is manualy selected
 	int _currentSourcePriority;
 
 	QByteArray _configHash;
 
 	QSize _ledGridSize;
-	
+
 	int _ledMAppingType;
-	
+
 	int _configVersionId;
-	
+
 	hyperion::Components   _prevCompId;
 	BonjourServiceBrowser  _bonjourBrowser;
 	BonjourServiceResolver _bonjourResolver;
 	BonjourRegister        _hyperionSessions;
 	QString                _bonjourCurrentServiceToResolve;
+
+	/// Observe filesystem changes (_configFile), if failed use Timer
+	QFileSystemWatcher _fsWatcher;
+	QTimer _cTimer;
+
+	/// holds the prev states of configWriteable and modified
+	bool _prevConfigMod = false;
+	bool _prevConfigWrite = true;
+
+	/// holds the current states of configWriteable and modified
+	bool _configMod = false;
+	bool _configWrite = true;
+
+	/// timers to handle severinfo blocking
+	QTimer _fsi_timer;
+	QTimer _fsi_blockTimer; 
+	
+	VideoMode _videoMode;
+	GrabbingMode _grabbingMode;
 };

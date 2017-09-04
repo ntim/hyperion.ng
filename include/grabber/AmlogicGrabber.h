@@ -1,18 +1,16 @@
 #pragma once
 
-// STL includes
-#include <cstdint>
-#include <utils/Logger.h>
 // Utils includes
-#include <utils/Image.h>
 #include <utils/ColorBgr.h>
-#include <utils/VideoMode.h>
+#include <utils/ColorRgba.h>
+#include <hyperion/Grabber.h>
+#include <grabber/FramebufferFrameGrabber.h>
+
+class IonBuffer;
 
 ///
-/// The DispmanxFrameGrabber is used for creating snapshots of the display (screenshots) with a
-/// downsized and scaled resolution.
 ///
-class AmlogicGrabber
+class AmlogicGrabber : public Grabber
 {
 public:
 	///
@@ -25,12 +23,6 @@ public:
 	~AmlogicGrabber();
 
 	///
-	/// Set the video mode (2D/3D)
-	/// @param[in] mode The new video mode
-	///
-	void setVideoMode(const VideoMode videoMode);
-
-	///
 	/// Captures a single snapshot of the display and writes the data to the given image. The
 	/// provided image should have the same dimensions as the configured values (_width and
 	/// _height)
@@ -39,22 +31,32 @@ public:
 	/// height)
 	/// @return Zero on success else negative
 	///
-	int grabFrame(Image<ColorBgr> & image);
+	int grabFrame(Image<ColorRgb> & image);
 
+private:
 	/**
 	 * Returns true if video is playing over the amlogic chip
 	 * @return True if video is playing else false
 	 */
 	bool isVideoPlaying();
-private:
+	void closeDev(int &fd);
+	bool openDev(int &fd, const char* dev);
 
-	/// With of the captured snapshot [pixels]
-	const unsigned _width;
-	/// Height of the captured snapshot [pixels]
-	const unsigned _height;
+	int grabFrame_amvideocap(Image<ColorRgb> & image);
+	int grabFrame_ge2d(Image<ColorRgb> & image);
 
 	/** The snapshot/capture device of the amlogic video chip */
-	int _amlogicCaptureDev;
+	int             _captureDev;
+	int             _videoDev;
+	int             _ge2dDev;
+
+	Image<ColorBgr> _image_bgr;
 	
-	Logger * _log;
+	int             _lastError;
+	bool            _videoPlaying;
+	FramebufferFrameGrabber _fbGrabber;
+	int             _grabbingModeNotification;
+	bool            _ge2dAvailable;
+	void*           _ge2dVideoBufferPtr;
+	IonBuffer*      _ge2dIonBuffer;
 };

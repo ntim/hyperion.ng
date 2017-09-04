@@ -3,30 +3,12 @@
 set(CURRENT_HEADER_DIR ${CMAKE_SOURCE_DIR}/include/boblightserver)
 set(CURRENT_SOURCE_DIR ${CMAKE_SOURCE_DIR}/libsrc/boblightserver)
 
-# Group the headers that go through the MOC compiler
-set(BoblightServer_QT_HEADERS
-	${CURRENT_HEADER_DIR}/BoblightServer.h
-	${CURRENT_SOURCE_DIR}/BoblightClientConnection.h
-)
+FILE ( GLOB BoblightServer_SOURCES "${CURRENT_HEADER_DIR}/*.h"  "${CURRENT_SOURCE_DIR}/*.h"  "${CURRENT_SOURCE_DIR}/*.cpp" )
 
-set(BoblightServer_HEADERS
-)
-
-set(BoblightServer_SOURCES
-	${CURRENT_SOURCE_DIR}/BoblightServer.cpp
-	${CURRENT_SOURCE_DIR}/BoblightClientConnection.cpp
-)
-
-qt5_wrap_cpp(BoblightServer_HEADERS_MOC ${BoblightServer_QT_HEADERS})
-
-add_library(boblightserver
-	${BoblightServer_HEADERS}
-	${BoblightServer_QT_HEADERS}
-	${BoblightServer_SOURCES}
-	${BoblightServer_HEADERS_MOC}
-)
+add_library(boblightserver ${BoblightServer_SOURCES} )
 
 target_link_libraries(boblightserver
 	hyperion
 	hyperion-utils
-	${QT_LIBRARIES})
+	${QT_LIBRARIES}
+)

@@ -1,20 +1,18 @@
-cmake_minimum_required(VERSION 2.8)
+cmake_minimum_required(VERSION 2.8.12)
 
 PROJECT(hyperion)
 
+# Instruct CMake to run moc automatically when needed.
+set(CMAKE_AUTOMOC ON)
+
 IF ( POLICY CMP0026 )
 	CMAKE_POLICY( SET CMP0026 OLD )
-ENDIF()
-
-IF ( POLICY CMP0043 )
-	CMAKE_POLICY( SET CMP0043 OLD )
 ENDIF()
 
 SET ( HYPERION_VERSION_STABLE OFF )
 SET ( HYPERION_VERSION_MAJOR 2 )
 SET ( HYPERION_VERSION_MINOR 0 )
 SET ( HYPERION_VERSION_PATCH 0 )
-SET ( CURRENT_CONFIG_VERSION 2 )
 
 SET ( DEFAULT_AMLOGIC    OFF )
 SET ( DEFAULT_DISPMANX   OFF )
@@ -29,10 +27,12 @@ IF ( ${CMAKE_SYSTEM} MATCHES "Linux" )
 	SET ( DEFAULT_V4L2   ON  )
 	SET ( DEFAULT_SPIDEV ON )
 	SET ( DEFAULT_FB     ON )
+	SET ( DEFAULT_USB_HID ON )
 ELSE()
 	SET ( DEFAULT_V4L2   OFF )
-	SET ( DEFAULT_SPIDEV OFF )
 	SET ( DEFAULT_FB     OFF )
+	SET ( DEFAULT_SPIDEV OFF )
+	SET ( DEFAULT_USB_HID OFF )
 ENDIF()
 
 if (APPLE)
@@ -69,7 +69,8 @@ message( STATUS "PLATFORM: ${PLATFORM}")
 if ( "${PLATFORM}" MATCHES "osx" )
 	SET(CMAKE_PREFIX_PATH ${CMAKE_PREFIX_PATH} "/usr/local/opt/qt5" CACHE STRING "path to your QT5 files" )
 	include_directories("/opt/X11/include/")
-	SET ( DEFAULT_OSX        ON  )
+	SET ( DEFAULT_OSX        ON )
+	SET ( DEFAULT_USB_HID    ON )
 elseif ( "${PLATFORM}" STREQUAL "rpi" )
 	SET ( DEFAULT_DISPMANX   ON )
 	SET ( DEFAULT_WS281XPWM  ON )
@@ -94,6 +95,9 @@ if ( "${PLATFORM}" MATCHES "-dev" )
 	SET ( DEFAULT_TESTS      ON )
 endif()
 
+STRING( TOUPPER "-DPLATFORM_${PLATFORM}" PLATFORM_DEFINE)
+STRING( REPLACE "-DEV" "" PLATFORM_DEFINE "${PLATFORM_DEFINE}" )
+ADD_DEFINITIONS( ${PLATFORM_DEFINE} )
 
 # set the build options
 option(ENABLE_AMLOGIC "Enable the AMLOGIC video grabber" ${DEFAULT_AMLOGIC} )
@@ -102,7 +106,11 @@ message(STATUS "ENABLE_AMLOGIC = ${ENABLE_AMLOGIC}")
 option(ENABLE_DISPMANX "Enable the RPi dispmanx grabber" ${DEFAULT_DISPMANX} )
 message(STATUS "ENABLE_DISPMANX = ${ENABLE_DISPMANX}")
 
-option(ENABLE_FB "Enable the framebuffer grabber" ${DEFAULT_FB} )
+if (ENABLE_AMLOGIC)
+	SET(ENABLE_FB ON)
+else()
+	option(ENABLE_FB "Enable the framebuffer grabber" ${DEFAULT_FB} )
+endif()
 message(STATUS "ENABLE_FB = ${ENABLE_FB}")
 
 option(ENABLE_OSX "Enable the osx grabber" ${DEFAULT_OSX} )
@@ -117,8 +125,11 @@ message(STATUS "ENABLE_TINKERFORGE = ${ENABLE_TINKERFORGE}")
 option(ENABLE_V4L2 "Enable the V4L2 grabber" ${DEFAULT_V4L2})
 message(STATUS "ENABLE_V4L2 = ${ENABLE_V4L2}")
 
-option(ENABLE_WS281XPWM   "Enable the WS281x-PWM device" ${DEFAULT_WS281XPWM} )
+option(ENABLE_WS281XPWM "Enable the WS281x-PWM device" ${DEFAULT_WS281XPWM} )
 message(STATUS "ENABLE_WS281XPWM = ${ENABLE_WS281XPWM}")
+
+option(ENABLE_USB_HID "Enable the libusb and hid devices" ${DEFAULT_USB_HID} )
+message(STATUS "ENABLE_USB_HID = ${ENABLE_USB_HID}")
 
 option(ENABLE_X11 "Enable the X11 grabber" ${DEFAULT_X11})
 message(STATUS "ENABLE_X11 = ${ENABLE_X11}")
@@ -160,7 +171,7 @@ IF ( ${CHECK_EFFECTS_FAILED} )
 ENDIF ()
 
 EXECUTE_PROCESS (
-	COMMAND python test/jsonchecks/checkschema.py config/hyperion.config.json.default libsrc/hyperion/schemas/hyperion.schema-${CURRENT_CONFIG_VERSION}.json
+	COMMAND python test/jsonchecks/checkschema.py config/hyperion.config.json.default libsrc/hyperion/hyperion.schema.json
 	WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
 	RESULT_VARIABLE CHECK_CONFIG_FAILED
 )
@@ -210,10 +221,16 @@ else()
     message(STATUS "No support for C++11 detected. Compilation will most likely fail on your compiler")
 endif()
 
+# setup -rpath to search for shared libs in BINARY/../libs folder
+if (UNIX AND NOT APPLE)
+	SET(CMAKE_SKIP_BUILD_RPATH  FALSE)
+	SET(CMAKE_BUILD_WITH_INSTALL_RPATH TRUE)
+	SET(CMAKE_INSTALL_RPATH "$ORIGIN/../lib")
+endif ()
+
 # add QT5 dependency
 SET(QT_MIN_VERSION "5.2.0")
 find_package(Qt5 COMPONENTS Core Gui Network REQUIRED)
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}    ${Qt5Widgets_EXECUTABLE_COMPILE_FLAGS}")
 message( STATUS "Found Qt Version: ${Qt5Core_VERSION}" )
 IF ( "${Qt5Core_VERSION}" VERSION_LESS "${QT_MIN_VERSION}" )
 	message( FATAL_ERROR "Your Qt version is to old! Minimum required ${QT_MIN_VERSION}" )
@@ -226,11 +243,11 @@ find_package(Threads REQUIRED)
 add_definitions(${QT_DEFINITIONS})
 
 # TODO[TvdZ]: This linking directory should only be added if we are cross compiling
-if(NOT APPLE)
-	link_directories(${CMAKE_FIND_ROOT_PATH}/lib/arm-linux-gnueabihf)
-endif()
+#if(NOT APPLE)
+#	link_directories(${CMAKE_FIND_ROOT_PATH}/lib/arm-linux-gnueabihf)
+#endif()
 
-if(ENABLE_OSX)
+if(APPLE)
 	set(CMAKE_EXE_LINKER_FLAGS "-framework CoreGraphics")
 endif()
 
@@ -246,7 +263,7 @@ endif ()
 add_subdirectory(doc)
 
 # remove generated files on make cleaan too
-LIST( APPEND GENERATED_QRC 
+LIST( APPEND GENERATED_QRC
 	${CMAKE_BINARY_DIR}/EffectEngine.qrc
 	${CMAKE_BINARY_DIR}/WebConfig.qrc
 	${CMAKE_BINARY_DIR}/HyperionConfig.h
@@ -259,5 +276,3 @@ add_custom_target(uninstall COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_BINARY_D
 
 # enable make package - no code after this line !
 include (${CMAKE_CURRENT_SOURCE_DIR}/cmake/packages.cmake)
-
-
